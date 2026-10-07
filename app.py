@@ -100,6 +100,23 @@ def init_db():
         )
     """)
     conn.commit()
+    
+    # فحص وإضافة أي أعمدة قديمة ناقصة في جدول routes تلقائياً
+    c.execute("PRAGMA table_info(routes)")
+    existing_cols = [row[1] for row in c.fetchall()]
+    
+    columns_to_ensure = [
+        ("distance_km", "REAL"),
+        ("duration_min", "REAL"),
+        ("notes", "TEXT"),
+        ("status", "TEXT DEFAULT 'approved'")
+    ]
+    for col_name, col_type in columns_to_ensure:
+        if col_name not in existing_cols:
+            c.execute(f"ALTER TABLE routes ADD COLUMN {col_name} {col_type}")
+            conn.commit()
+
+    # ملء المحطات الافتراضية إذا كان الجدول فارغاً
     c.execute("SELECT COUNT(*) FROM hubs")
     if c.fetchone()[0] == 0:
         c.executemany("INSERT OR IGNORE INTO hubs (name, lat, lon) VALUES (?, ?, ?)", DEFAULT_HUBS)
@@ -218,7 +235,6 @@ if app_mode == "تتبع ومسارات الباصات":
 
         coords = json.loads(cur_route['coordinates'])
         
-        # ميزة تتبع انطلاق وحركة الرحلة
         c_sim1, c_sim2 = st.columns([1, 3])
         with c_sim1:
             run_tracking = st.button("🚍 محاكاة تتبع حركة الباص من الانطلاق")
@@ -231,7 +247,6 @@ if app_mode == "تتبع ومسارات الباصات":
             folium.Marker(coords[0], tooltip="نقطة الانطلاق", icon=folium.Icon(color="green", icon="play")).add_to(m)
             folium.Marker(coords[-1], tooltip=cur_route['university'], icon=folium.Icon(color="red", icon="flag")).add_to(m)
             
-            # دبوس الحافلة المتحرك
             bus_loc = coords[bus_position_idx]
             folium.Marker(
                 bus_loc,
@@ -261,7 +276,7 @@ if app_mode == "تتبع ومسارات الباصات":
             with map_placeholder.container():
                 st_folium(render_bus_map(0), width=900, height=450, key="static_map")
 
-# 2. شاشة اقتراح خط جديد (مع إمكانية تثبيت الدبوس بالنقرة أو اختيار محطة)
+# 2. شاشة اقتراح خط جديد
 elif app_mode == "اقتراح خط جديد":
     st.title("➕ اقتراح مسار باص جديد")
     st.write("يمكنك تحديد المحطات من القوائم الجاهزة، أو **النقر المباشر على الخريطة لتثبيت دبوس البداية والنهاية** بدقة.")
@@ -280,7 +295,6 @@ elif app_mode == "اقتراح خط جديد":
     if input_type == "تثبيت الدبوس يدوياً على الخريطة":
         st.caption("👇 انقر على الخريطة لتثبيت الدبوس الأخضر (بداية)، ثم انقر مرة أخرى لتثبيت الدبوس الأحمر (وجهة):")
         
-        # خريطة الأردن لتحديد المواقع
         pin_map = folium.Map(location=[32.2, 35.9], zoom_start=9, tiles="CartoDB positron")
         if st.session_state.user_start_pin:
             folium.Marker(st.session_state.user_start_pin, tooltip="نقطة البداية المحددة", icon=folium.Icon(color="green")).add_to(pin_map)
