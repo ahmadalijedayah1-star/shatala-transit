@@ -1,3 +1,9 @@
+import os
+try:
+    import libsql_client
+except ImportError:
+    libsql_client = None
+
 import streamlit as st
 from streamlit_folium import st_folium
 import folium
@@ -42,46 +48,77 @@ def verify_pw_secure(password: str, stored_hash: str) -> bool:
     except Exception:
         return False
 
+
+def get_db_client():
+    turso_url = st.secrets.get("TURSO_DB_URL") if "TURSO_DB_URL" in st.secrets else os.getenv("TURSO_DB_URL")
+    turso_token = st.secrets.get("TURSO_AUTH_TOKEN") if "TURSO_AUTH_TOKEN" in st.secrets else os.getenv("TURSO_AUTH_TOKEN")
+    if turso_url and turso_token and libsql_client:
+        return libsql_client.create_client_sync(url=turso_url, auth_token=turso_token)
+    return None
+
+
+def get_db_client():
+    turso_url = st.secrets.get("TURSO_DB_URL") if "TURSO_DB_URL" in st.secrets else os.getenv("TURSO_DB_URL")
+    turso_token = st.secrets.get("TURSO_AUTH_TOKEN") if "TURSO_AUTH_TOKEN" in st.secrets else os.getenv("TURSO_AUTH_TOKEN")
+    if turso_url and turso_token and libsql_client:
+        return libsql_client.create_client_sync(url=turso_url, auth_token=turso_token)
+    return None
+
 def init_db():
-    with get_db_connection() as conn:
+    client = get_db_client()
+    create_tables_sql = [
+        '''CREATE TABLE IF NOT EXISTS routes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            university TEXT NOT NULL,
+            fare REAL NOT NULL,
+            stations TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );''',
+        '''CREATE TABLE IF NOT EXISTS route_suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_note TEXT,
+            start_point TEXT,
+            end_point TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );''',
+        '''CREATE TABLE IF NOT EXISTS assistants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT DEFAULT 'assistant',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );'''
+    ]
+    if client:
+        with client:
+            for sql in create_tables_sql:
+                client.execute(sql)
+    else:
+        conn = sqlite3.connect("masar_database.db")
         cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS routes (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                start_point TEXT NOT NULL,
-                end_point TEXT NOT NULL,
-                stops TEXT,
-                fare REAL NOT NULL,
-                duration TEXT NOT NULL,
-                status TEXT NOT NULL,
-                coordinates TEXT NOT NULL
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS admin_security (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                failed_attempts INTEGER DEFAULT 0,
-                lockout_until REAL DEFAULT 0.0
-            )
-        """)
-        cursor.execute("INSERT OR IGNORE INTO admin_security (id, failed_attempts, lockout_until) VALUES (1, 0, 0.0)")
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sub_admins (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                full_name TEXT NOT NULL,
-                is_active INTEGER DEFAULT 1,
-                created_at REAL NOT NULL
-            )
-        """)
+        for sql in create_tables_sql:
+            cursor.execute(sql)
         conn.commit()
+        conn.close()
 
-init_db()
+def execute_query(query, params=()):
+    client = get_db_client()
+    if client:
+        with client:
+            rs = client.execute(query, params)
+            return rs.rows
+    else:
+        conn = sqlite3.connect("masar_database.db")
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        data = cursor.fetchall()
+        conn.commit()
+        conn.close()
+        return data
 
-# --- 3. الدوال الجغرافية والحسابية ---
 def is_valid_coord(coord):
     if isinstance(coord, (list, tuple)) and len(coord) == 2:
         lat, lon = coord[0], coord[1]
