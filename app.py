@@ -30,10 +30,10 @@ html, body, [class*="css"] {
 </style>
 """, unsafe_allow_html=True)
 
-# قائمة محطات ومجمعات وجامعات الأردن بالإحداثيات المدمجة
 JORDAN_HUBS = {
     "مجمع الشمال (إربد)": (32.5562, 35.8498),
     "مجمع عمان الجديد (إربد)": (32.5315, 35.8540),
+    "مجمع الأغوار الجديد (إربد)": (32.5442, 35.8398),
     "جامعة اليرموك - البوابة الشمالية": (32.5370, 35.8530),
     "جامعة اليرموك - البوابة الجنوبية": (32.5290, 35.8550),
     "جامعة العلوم والتكنولوجيا (JUST)": (32.4950, 35.9912),
@@ -59,7 +59,7 @@ UNIVERSITIES = [
 ]
 
 def get_db():
-    conn = sqlite3.connect("masar_database.db", check_same_thread=False)
+    conn = sqlite3.connect("shatala_live.db", check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -71,9 +71,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             route_name TEXT NOT NULL,
             university TEXT NOT NULL,
-            fare REAL NOT NULL,
-            distance_km REAL,
-            duration_min REAL,
+            fare REAL DEFAULT 0.50,
+            distance_km REAL DEFAULT 0.0,
+            duration_min REAL DEFAULT 0.0,
             coordinates TEXT NOT NULL,
             notes TEXT,
             status TEXT DEFAULT 'approved'
@@ -104,7 +104,7 @@ def add_route(route_name, university, fare, distance_km, duration_min, coords_js
     db_execute("""
         INSERT INTO routes (route_name, university, fare, distance_km, duration_min, coordinates, notes, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (route_name, university, fare, distance_km, duration_min, coords_json, notes, status), commit=True)
+    """, (route_name, university, float(fare), float(distance_km), float(duration_min), coords_json, notes, status), commit=True)
 
 def update_route_fare_and_details(route_id, new_fare, new_name=None, new_notes=None):
     if new_name and new_notes is not None:
@@ -153,14 +153,12 @@ def fetch_osrm_route(start_lat, start_lon, end_lat, end_lon):
     dur = round((dist / 40.0) * 60, 1)
     return dist, dur, [[start_lat, start_lon], [end_lat, end_lon]]
 
-# الشريط الجانبي
 st.sidebar.image("https://img.icons8.com/color/96/bus.png", width=70)
 st.sidebar.title("شَعتَله 🚌")
 st.sidebar.caption("مسارات باصات الجامعات الأردنية")
 
 app_mode = st.sidebar.radio("التنقل:", ["تتبع ومسارات الباصات", "اقتراح خط جديد", "بوابة الإدارة"])
 
-# الشاشة الأولى: استعراض وتتبع المسارات
 if app_mode == "تتبع ومسارات الباصات":
     st.title("🗺️ استعراض مسارات ومواعيد الباصات")
     
@@ -188,27 +186,26 @@ if app_mode == "تتبع ومسارات الباصات":
         folium.Marker(coords[-1], tooltip=cur_route['university'], icon=folium.Icon(color="red", icon="flag")).add_to(m)
         st_folium(m, width=900, height=450)
 
-# الشاشة الثانية: اقتراح مسار بدون أرقام إحداثيات
 elif app_mode == "اقتراح خط جديد":
     st.title("➕ اقتراح مسار باص جديد")
-    st.write("حدد نقطتي الانطلاق والوصول ليتم رسم الشوارع وحساب المسافة تلقائياً.")
+    st.write("حدد محطتي الانطلاق والوصول ليتم تجهيز المسار وحساب المسافة تلقائياً.")
     
     with st.form("suggest_form"):
         c1, c2 = st.columns(2)
         with c1:
-            name = st.text_input("اسم الخط (مثال: مجمع عمان الجديد - جامعة اليرموك)")
+            name = st.text_input("اسم الخط (مثال: مجمع الأغوار الجديد - جامعة اليرموك)")
             uni = st.selectbox("الجامعة الوجهة:", UNIVERSITIES)
         with c2:
             suggested_fare = st.number_input("الأجرة المتوقعة (د.أ):", min_value=0.10, value=0.50, step=0.05, format="%.2f")
-            notes = st.text_area("أماكن التوقف أو نقاط المرور:")
+            notes = st.text_area("أماكن التوقف أو ملاحظات إضافية:")
         
         st.subheader("محطات البداية والنهاية")
         hub_list = list(JORDAN_HUBS.keys())
         cc1, cc2 = st.columns(2)
         with cc1:
-            start_hub = st.selectbox("مكان الانطلاق:", hub_list, index=0)
+            start_hub = st.selectbox("مكان الانطلاق:", hub_list, index=2)
         with cc2:
-            end_hub = st.selectbox("مكان الوصول / الجامعة:", hub_list, index=2)
+            end_hub = st.selectbox("مكان الوصول / الجامعة:", hub_list, index=3)
             
         submitted = st.form_submit_button("إرسال المقترح للإدارة")
         if submitted:
@@ -223,7 +220,6 @@ elif app_mode == "اقتراح خط جديد":
                 add_route(name, uni, suggested_fare, dist, dur, json.dumps(pts), notes, status='pending')
                 st.success("✅ تم إرسال المقترح بنجاح للإدارة للتدقيق والاعتماد.")
 
-# الشاشة الثالثة: بوابة الإدارة والتحكم
 elif app_mode == "بوابة الإدارة":
     st.title("🔒 بوابة الإدارة والتحكم")
     
@@ -262,7 +258,6 @@ elif app_mode == "بوابة الإدارة":
             "➕ إضافة مسار مباشر"
         ])
 
-        # تبويب تعديل الأسعار للمشرف والمساعد
         with tab_edit:
             st.subheader("تعديل الأجرة وتفاصيل الخطوط العاملة")
             routes = get_routes('approved')
@@ -301,9 +296,8 @@ elif app_mode == "بوابة الإدارة":
             else:
                 st.info("لا توجد خطوط معتمدة حالياً.")
 
-        # تبويب اعتماد الطلبات المقترحة
         with tab_pending:
-            st.subheader("الطلبات المقترحة من الطلاب بانتظار الاعتماد")
+            st.subheader("الطلبات المقترحة بانتظار الاعتماد وتعديل الأسعار")
             pending = get_routes('pending')
             if not pending:
                 st.success("لا توجد طلبات معلقة حالياً.")
@@ -334,7 +328,6 @@ elif app_mode == "بوابة الإدارة":
                                 st.warning("تم رفض المقترح.")
                                 st.rerun()
 
-        # تبويب إضافة مسار جديد بدون إحداثيات
         with tab_new:
             st.subheader("إضافة مسار معتمد مباشرة")
             with st.form("admin_add_route"):
@@ -346,9 +339,9 @@ elif app_mode == "بوابة الإدارة":
                 hub_list = list(JORDAN_HUBS.keys())
                 ac1, ac2 = st.columns(2)
                 with ac1:
-                    a_start = st.selectbox("نقطة الانطلاق المعتمدة:", hub_list, index=0)
+                    a_start = st.selectbox("نقطة الانطلاق المعتمدة:", hub_list, index=2)
                 with ac2:
-                    a_end = st.selectbox("نقطة الوصول المعتمدة:", hub_list, index=1)
+                    a_end = st.selectbox("نقطة الوصول المعتمدة:", hub_list, index=3)
                 
                 if st.form_submit_button("إضافة الخط فوراً إلى الخدمة"):
                     if a_name and a_start != a_end:
@@ -356,7 +349,7 @@ elif app_mode == "بوابة الإدارة":
                         al2, on2 = JORDAN_HUBS[a_end]
                         dist, dur, pts = fetch_osrm_route(al1, on1, al2, on2)
                         add_route(a_name, a_uni, a_fare, dist, dur, json.dumps(pts), a_notes, status='approved')
-                        st.success("✅ تمت إضافة المسار بنجاح إلى شبكة الخطوط دون الحاجة لأرقام إحداثيات!")
+                        st.success("✅ تمت إضافة المسار بنجاح إلى شبكة الخطوط!")
                         st.rerun()
                     else:
                         st.error("يرجى التأكد من كتابة اسم الخط واختيار محطتين مختلفتين.")
