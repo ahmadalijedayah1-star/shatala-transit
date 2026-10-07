@@ -1,2 +1,4 @@
 streamlit
-libsql-client
+streamlit-folium
+folium
+requests
