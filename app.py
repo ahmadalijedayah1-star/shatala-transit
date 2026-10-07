@@ -1,4 +1,4 @@
-import libsql_experimental as libsql
+import libsql_client
 import os
 try:
     import libsql_client
@@ -638,6 +638,7 @@ elif mode == "🔐 Admin Panel":
 def get_connection():
     db_url = st.secrets["TURSO_DB_URL"]
     auth_token = st.secrets["TURSO_AUTH_TOKEN"]
-    conn = libsql.connect("sh3talh.db", sync_url=db_url, auth_token=auth_token)
-    conn.sync()
-    return conn
+    # تحويل الرابط إلى https للاتصال المباشر السلس
+    http_url = db_url.replace("libsql://", "https://")
+    client = libsql_client.create_client_sync(url=http_url, auth_token=auth_token)
+    return client
