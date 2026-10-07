@@ -1,3 +1,4 @@
+import libsql_experimental as libsql
 import os
 try:
     import libsql_client
@@ -633,3 +634,10 @@ elif mode == "🔐 Admin Panel":
                                     conn.cursor().execute("DELETE FROM sub_admins WHERE id = ?", (a["id"],))
                                     conn.commit()
                                 st.rerun()
+
+def get_connection():
+    db_url = st.secrets["TURSO_DB_URL"]
+    auth_token = st.secrets["TURSO_AUTH_TOKEN"]
+    conn = libsql.connect("sh3talh.db", sync_url=db_url, auth_token=auth_token)
+    conn.sync()
+    return conn

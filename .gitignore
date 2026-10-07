@@ -4,3 +4,5 @@
 *.db-shm
 __pycache__/
 venv/
+.streamlit/secrets.toml
+*.db
