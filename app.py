@@ -8,7 +8,7 @@ import requests
 import sqlite3
 
 st.set_page_config(
-    page_title="شَعتَله",
+    page_title="شعتَله",
     page_icon="🚌",
     layout="wide",
     initial_sidebar_state="expanded"
