@@ -180,7 +180,7 @@ if app_mode == "تتبع ومسارات الباصات":
                 st.info(f"ملاحظات: {cur_route['notes']}")
         
         coords = json.loads(cur_route['coordinates'])
-        m = folium.Map(location=coords[0], zoom_start=12, tiles="CartoDB positron")
+        m = folium.Map(location=coords[0], zoom_start=12, tiles="OpenStreetMap")
         folium.PolyLine(coords, color="#2A75D3", weight=5, opacity=0.8).add_to(m)
         folium.Marker(coords[0], tooltip="نقطة الانطلاق / المجمع", icon=folium.Icon(color="green", icon="play")).add_to(m)
         folium.Marker(coords[-1], tooltip=cur_route['university'], icon=folium.Icon(color="red", icon="flag")).add_to(m)
